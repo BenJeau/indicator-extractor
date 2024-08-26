@@ -79,6 +79,7 @@ dependencies = [
 name = "indicator-extractor"
 version = "0.1.0"
 dependencies = [
+ "nom",
  "pdf-extract",
 ]
 
