@@ -27,7 +27,7 @@ pub enum Indicator<'a> {
     Md5(&'a [u8]),
 }
 
-pub fn extract_indicators<'a>(input: &'a [u8]) -> IResult<&'a [u8], Vec<Indicator>> {
+pub fn extract_indicators(input: &[u8]) -> IResult<&[u8], Vec<Indicator>> {
     let (input, _) = multispace0(input)?;
     let (input, indicator) = complete(separated_list0(
         preceded(is_not(" \t\r\n"), multispace1),
@@ -36,7 +36,7 @@ pub fn extract_indicators<'a>(input: &'a [u8]) -> IResult<&'a [u8], Vec<Indicato
     Ok((input, indicator.into_iter().flatten().collect()))
 }
 
-pub fn extract_indicator<'a>(input: &'a [u8]) -> IResult<&'a [u8], Indicator> {
+pub fn extract_indicator(input: &[u8]) -> IResult<&[u8], Indicator> {
     alt((
         extract_url,
         extract_email,
@@ -46,15 +46,15 @@ pub fn extract_indicator<'a>(input: &'a [u8]) -> IResult<&'a [u8], Indicator> {
     ))(input)
 }
 
-fn extract_url<'a>(input: &'a [u8]) -> IResult<&'a [u8], Indicator> {
+fn extract_url(input: &[u8]) -> IResult<&[u8], Indicator> {
     Err(Err::Error(make_error(input, ErrorKind::Verify)))
 }
 
-fn extract_email<'a>(input: &'a [u8]) -> IResult<&'a [u8], Indicator> {
+fn extract_email(input: &[u8]) -> IResult<&[u8], Indicator> {
     Err(Err::Error(make_error(input, ErrorKind::Verify)))
 }
 
-fn extract_ipv4<'a>(input: &'a [u8]) -> IResult<&'a [u8], Indicator> {
+fn extract_ipv4(input: &[u8]) -> IResult<&[u8], Indicator> {
     let (input, first_octet) = octect(input)?;
     let (input, _) = eat_defanged_period(input)?;
     let (input, second_octet) = octect(input)?;
@@ -73,7 +73,7 @@ fn octect(input: &[u8]) -> IResult<&[u8], u8> {
     Ok((
         input,
         octet_parts
-            .into_iter()
+            .iter()
             .rev()
             .enumerate()
             .fold(0, |acc, (i, c)| acc + 10_u8.pow(i as u32) * (c - b'0')),
@@ -84,11 +84,11 @@ fn eat_defanged_period(input: &[u8]) -> IResult<&[u8], &[u8]> {
     alt((tag("."), tag("[.]")))(input)
 }
 
-fn extract_ipv6<'a>(input: &'a [u8]) -> IResult<&'a [u8], Indicator> {
+fn extract_ipv6(input: &[u8]) -> IResult<&[u8], Indicator> {
     Err(Err::Error(make_error(input, ErrorKind::Verify)))
 }
 
-fn extract_hash<'a>(input: &'a [u8]) -> IResult<&'a [u8], Indicator> {
+fn extract_hash(input: &[u8]) -> IResult<&[u8], Indicator> {
     let (input, hash) = hex_digit1(input)?;
 
     match hash.len() {
