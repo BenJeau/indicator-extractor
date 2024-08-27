@@ -11,6 +11,7 @@ impl DataExtractor for PdfExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::extract_indicators;
 
     #[test]
     fn test_extract() {
@@ -19,6 +20,12 @@ mod tests {
         let extractor = PdfExtractor;
         let result = extractor.extract(&data);
 
-        todo!()
+        let indicators = extract_indicators(&result.as_bytes()).unwrap();
+
+        for indicator in indicators.1 {
+            println!("{:?}", indicator);
+        }
+
+        assert!(false);
     }
 }

@@ -1,7 +1,9 @@
-use helpers::{dec_u8, defanged_colon, defanged_period, hex_u16, is_not_digit, is_not_hex_digit};
+use helpers::{
+    dec_u8, defanged_colon, defanged_period, hex_u16, is_multispace, is_not_digit, is_not_hex_digit,
+};
 use nom::{
     branch::alt,
-    bytes::complete::{is_not, tag, take_while},
+    bytes::complete::{is_not, tag, take_till, take_while},
     character::{
         complete::{alphanumeric1, hex_digit1, multispace0, multispace1},
         is_alphanumeric,
@@ -12,13 +14,21 @@ use nom::{
     sequence::preceded,
     Err, IResult,
 };
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::{
+    net::{Ipv4Addr, Ipv6Addr},
+    sync::LazyLock,
+};
 
 mod helpers;
 
-#[derive(Debug, PartialEq)]
+static TLD_EXTRACTOR: LazyLock<tldextract::TldExtractor> =
+    LazyLock::new(|| tldextract::TldExtractor::new(Default::default()));
+
+#[derive(Debug, PartialEq, PartialOrd, Ord, Eq)]
 pub enum Indicator<'a> {
     Url(String),
+    Domain(String),
+    File(String),
     Email(String),
     Ipv4(Ipv4Addr),
     Ipv6(Ipv6Addr),
@@ -34,7 +44,12 @@ pub fn extract_indicators(input: &[u8]) -> IResult<&[u8], Vec<Indicator>> {
         preceded(opt(is_not(" \t\r\n")), multispace1),
         opt(extract_indicator),
     ))(input)?;
-    Ok((input, indicator.into_iter().flatten().collect()))
+
+    let mut indicators = indicator.into_iter().flatten().collect::<Vec<Indicator>>();
+    indicators.sort();
+    indicators.dedup();
+
+    Ok((input, indicators))
 }
 
 pub fn extract_indicator(input: &[u8]) -> IResult<&[u8], Indicator> {
@@ -44,11 +59,65 @@ pub fn extract_indicator(input: &[u8]) -> IResult<&[u8], Indicator> {
         extract_ipv4,
         extract_ipv6,
         extract_hash,
+        extract_domain,
     ))(input)
 }
 
 fn extract_url(input: &[u8]) -> IResult<&[u8], Indicator> {
-    Err(Err::Error(make_error(input, ErrorKind::Verify)))
+    let (input, scheme) = alt((tag("http"), tag("https")))(input)?;
+    let (input, _) = defanged_colon(input)?;
+    let (input, _) = tag("//")(input)?;
+    let (input, host) = separated_list1(defanged_period, alt((alphanumeric1, tag("-"))))(input)?;
+    let (input, rest) = take_till(is_multispace)(input)?;
+
+    Ok((
+        input,
+        Indicator::Url(format!(
+            "{}://{}{}",
+            std::str::from_utf8(scheme).unwrap(),
+            host.into_iter()
+                .map(|s| std::str::from_utf8(s).unwrap())
+                .collect::<Vec<&str>>()
+                .join("."),
+            std::str::from_utf8(rest).unwrap()
+        )),
+    ))
+}
+
+fn extract_domain(input: &[u8]) -> IResult<&[u8], Indicator> {
+    let (input, data) = separated_list1(defanged_period, alt((alphanumeric1, tag("-"))))(input)?;
+
+    if data.len() < 2 {
+        return Err(Err::Error(make_error(input, ErrorKind::Verify)));
+    }
+
+    let potential_domain = data
+        .into_iter()
+        .map(|s| std::str::from_utf8(s).unwrap())
+        .collect::<Vec<&str>>()
+        .join(".");
+
+    let Ok(tld) = TLD_EXTRACTOR.extract(&potential_domain) else {
+        return Ok((input, Indicator::File(potential_domain)));
+    };
+
+    if tld.domain.is_some() && tld.suffix.is_some() {
+        return Ok((
+            input,
+            Indicator::Domain(format!(
+                "{}{}.{}",
+                if let Some(subdomain) = tld.subdomain.as_ref() {
+                    format!("{}.", subdomain)
+                } else {
+                    "".to_string()
+                },
+                tld.domain.unwrap(),
+                tld.suffix.unwrap()
+            )),
+        ));
+    }
+
+    Ok((input, Indicator::File(potential_domain)))
 }
 
 fn extract_email(input: &[u8]) -> IResult<&[u8], Indicator> {
@@ -77,13 +146,11 @@ fn extract_ipv4(input: &[u8]) -> IResult<&[u8], Indicator> {
     let (input, _) = opt(take_while(is_not_digit))(input)?;
 
     let (input, octects) = separated_list1(defanged_period, dec_u8)(input)?;
-
     if octects.len() != 4 {
         return Err(Err::Error(make_error(input, ErrorKind::Verify)));
     }
 
     let ipv4_addr = Ipv4Addr::new(octects[0], octects[1], octects[2], octects[3]);
-
     Ok((input, Indicator::Ipv4(ipv4_addr)))
 }
 
@@ -91,7 +158,6 @@ fn extract_ipv6(input: &[u8]) -> IResult<&[u8], Indicator> {
     let (input, _) = opt(take_while(|c| c != b':' && !is_alphanumeric(c)))(input)?;
 
     let (input, hexes) = separated_list1(defanged_colon, hex_u16)(input)?;
-
     if hexes.len() != 8 {
         return Err(Err::Error(make_error(input, ErrorKind::Verify)));
     }
@@ -99,7 +165,6 @@ fn extract_ipv6(input: &[u8]) -> IResult<&[u8], Indicator> {
     let ipv6_addr = Ipv6Addr::new(
         hexes[0], hexes[1], hexes[2], hexes[3], hexes[4], hexes[5], hexes[6], hexes[7],
     );
-
     Ok((input, Indicator::Ipv6(ipv6_addr)))
 }
 
@@ -120,6 +185,17 @@ fn extract_hash(input: &[u8]) -> IResult<&[u8], Indicator> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_extract_single_url() {
+        let input = "http://www.example.com/foo/bar";
+        let expected = Indicator::Url("http://www.example.com/foo/bar".to_string());
+
+        assert_eq!(
+            extract_indicator(input.as_bytes()),
+            Ok(("".as_bytes(), expected))
+        );
+    }
 
     #[test]
     fn test_extract_single_ipv4_with_garbage() {

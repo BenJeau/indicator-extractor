@@ -39,3 +39,7 @@ pub(crate) fn is_not_digit(c: u8) -> bool {
 pub(crate) fn is_not_hex_digit(c: u8) -> bool {
     !is_hex_digit(c)
 }
+
+pub(crate) fn is_multispace(c: u8) -> bool {
+    c == b' ' || c == b'\t' || c == b'\r' || c == b'\n'
+}
