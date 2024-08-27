@@ -2,9 +2,13 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 
 use nom::{
     branch::alt,
-    bytes::complete::{is_not, take_while},
-    character::{complete::multispace0, is_alphanumeric, streaming::multispace1},
-    combinator::opt,
+    bytes::complete::{is_not, tag, take_while},
+    character::{
+        complete::{hex_digit1, multispace0},
+        is_digit,
+        streaming::multispace1,
+    },
+    combinator::{complete, opt},
     error::{make_error, ErrorKind},
     multi::separated_list0,
     sequence::preceded,
@@ -25,10 +29,10 @@ pub enum Indicator<'a> {
 
 pub fn extract_indicators<'a>(input: &'a [u8]) -> IResult<&'a [u8], Vec<Indicator>> {
     let (input, _) = multispace0(input)?;
-    let (input, indicator) = separated_list0(
+    let (input, indicator) = complete(separated_list0(
         preceded(is_not(" \t\r\n"), multispace1),
         opt(extract_indicator),
-    )(input)?;
+    ))(input)?;
     Ok((input, indicator.into_iter().flatten().collect()))
 }
 
@@ -51,7 +55,33 @@ fn extract_email<'a>(input: &'a [u8]) -> IResult<&'a [u8], Indicator> {
 }
 
 fn extract_ipv4<'a>(input: &'a [u8]) -> IResult<&'a [u8], Indicator> {
-    Err(Err::Error(make_error(input, ErrorKind::Verify)))
+    let (input, first_octet) = octect(input)?;
+    let (input, _) = eat_defanged_period(input)?;
+    let (input, second_octet) = octect(input)?;
+    let (input, _) = eat_defanged_period(input)?;
+    let (input, third_octet) = octect(input)?;
+    let (input, _) = eat_defanged_period(input)?;
+    let (input, fourth_octet) = octect(input)?;
+
+    let ipv4_addr = Ipv4Addr::new(first_octet, second_octet, third_octet, fourth_octet);
+
+    Ok((input, Indicator::Ipv4(ipv4_addr)))
+}
+
+fn octect(input: &[u8]) -> IResult<&[u8], u8> {
+    let (input, octet_parts) = take_while(is_digit)(input)?;
+    Ok((
+        input,
+        octet_parts
+            .into_iter()
+            .rev()
+            .enumerate()
+            .fold(0, |acc, (i, c)| acc + 10_u8.pow(i as u32) * (c - b'0')),
+    ))
+}
+
+fn eat_defanged_period(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    alt((tag("."), tag("[.]")))(input)
 }
 
 fn extract_ipv6<'a>(input: &'a [u8]) -> IResult<&'a [u8], Indicator> {
@@ -59,7 +89,7 @@ fn extract_ipv6<'a>(input: &'a [u8]) -> IResult<&'a [u8], Indicator> {
 }
 
 fn extract_hash<'a>(input: &'a [u8]) -> IResult<&'a [u8], Indicator> {
-    let (input, hash) = take_while(is_alphanumeric)(input)?;
+    let (input, hash) = hex_digit1(input)?;
 
     match hash.len() {
         32 => Ok((input, Indicator::Md5(hash))),
@@ -73,6 +103,39 @@ fn extract_hash<'a>(input: &'a [u8]) -> IResult<&'a [u8], Indicator> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_extract_single_ipv4() {
+        let input = "127.0.0.1";
+        let expected = Indicator::Ipv4(Ipv4Addr::new(127, 0, 0, 1));
+
+        assert_eq!(
+            extract_indicator(input.as_bytes()),
+            Ok(("".as_bytes(), expected))
+        );
+    }
+
+    #[test]
+    fn test_extract_single_partially_defanged_ipv4() {
+        let input = "127[.]0.0[.]1";
+        let expected = Indicator::Ipv4(Ipv4Addr::new(127, 0, 0, 1));
+
+        assert_eq!(
+            extract_indicator(input.as_bytes()),
+            Ok(("".as_bytes(), expected))
+        );
+    }
+
+    #[test]
+    fn test_extract_single_fully_defanged_ipv4() {
+        let input = "127[.]0[.]0[.]1";
+        let expected = Indicator::Ipv4(Ipv4Addr::new(127, 0, 0, 1));
+
+        assert_eq!(
+            extract_indicator(input.as_bytes()),
+            Ok(("".as_bytes(), expected))
+        );
+    }
 
     #[test]
     fn test_extract_md5() {
