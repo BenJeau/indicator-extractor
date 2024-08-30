@@ -1,5 +1,6 @@
 use helpers::{
-    dec_u8, defanged_colon, defanged_period, hex_u16, is_multispace, is_not_digit, is_not_hex_digit,
+    bytes_to_string, dec_u8, defanged_colon, defanged_period, hex_u16, is_multispace, is_not_digit,
+    is_not_hex_digit,
 };
 use nom::{
     branch::alt,
@@ -24,18 +25,19 @@ mod helpers;
 static TLD_EXTRACTOR: LazyLock<tldextract::TldExtractor> =
     LazyLock::new(|| tldextract::TldExtractor::new(Default::default()));
 
-#[derive(Debug, PartialEq, PartialOrd, Ord, Eq)]
-pub enum Indicator<'a> {
+#[derive(Debug, PartialEq, PartialOrd, Ord, Eq, serde::Serialize)]
+#[serde(tag = "kind", content = "value")]
+pub enum Indicator {
     Url(String),
     Domain(String),
     File(String),
     Email(String),
     Ipv4(Ipv4Addr),
     Ipv6(Ipv6Addr),
-    Sha512(&'a [u8]),
-    Sha256(&'a [u8]),
-    Sha1(&'a [u8]),
-    Md5(&'a [u8]),
+    Sha512(String),
+    Sha256(String),
+    Sha1(String),
+    Md5(String),
 }
 
 pub fn extract_indicators(input: &[u8]) -> IResult<&[u8], Vec<Indicator>> {
@@ -174,10 +176,10 @@ fn extract_hash(input: &[u8]) -> IResult<&[u8], Indicator> {
     let (input, hash) = hex_digit1(input)?;
 
     match hash.len() {
-        32 => Ok((input, Indicator::Md5(hash))),
-        40 => Ok((input, Indicator::Sha1(hash))),
-        64 => Ok((input, Indicator::Sha256(hash))),
-        128 => Ok((input, Indicator::Sha512(hash))),
+        32 => Ok((input, Indicator::Md5(bytes_to_string(hash)))),
+        40 => Ok((input, Indicator::Sha1(bytes_to_string(hash)))),
+        64 => Ok((input, Indicator::Sha256(bytes_to_string(hash)))),
+        128 => Ok((input, Indicator::Sha512(bytes_to_string(hash)))),
         _ => Err(Err::Error(make_error(input, ErrorKind::Verify))),
     }
 }
@@ -258,7 +260,7 @@ mod tests {
     fn test_extract_md5() {
         let input = "MD5 hash: d41d8cd98f00b204e9800998ecf8427e";
         let expected = vec![Indicator::Md5(
-            "d41d8cd98f00b204e9800998ecf8427e".as_bytes(),
+            "d41d8cd98f00b204e9800998ecf8427e".to_string(),
         )];
 
         assert_eq!(
@@ -270,7 +272,7 @@ mod tests {
     #[test]
     fn test_extract_single_md5() {
         let input = "d41d8cd98f00b204e9800998ecf8427e";
-        let expected = Indicator::Md5("d41d8cd98f00b204e9800998ecf8427e".as_bytes());
+        let expected = Indicator::Md5("d41d8cd98f00b204e9800998ecf8427e".to_string());
 
         assert_eq!(
             extract_indicator(input.as_bytes()),
@@ -282,7 +284,7 @@ mod tests {
     fn test_extract_sha1() {
         let input = "SHA1 hash: da39a3ee5e6b4b0d3255bfef95601890afd80709";
         let expected = vec![Indicator::Sha1(
-            "da39a3ee5e6b4b0d3255bfef95601890afd80709".as_bytes(),
+            "da39a3ee5e6b4b0d3255bfef95601890afd80709".to_string(),
         )];
 
         assert_eq!(
@@ -294,7 +296,7 @@ mod tests {
     #[test]
     fn test_extract_single_sha1() {
         let input = "da39a3ee5e6b4b0d3255bfef95601890afd80709";
-        let expected = Indicator::Sha1("da39a3ee5e6b4b0d3255bfef95601890afd80709".as_bytes());
+        let expected = Indicator::Sha1("da39a3ee5e6b4b0d3255bfef95601890afd80709".to_string());
 
         assert_eq!(
             extract_indicator(input.as_bytes()),
@@ -306,7 +308,7 @@ mod tests {
     fn test_extract_sha256() {
         let input = "SHA256 hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
         let expected = vec![Indicator::Sha256(
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".as_bytes(),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string(),
         )];
 
         assert_eq!(
@@ -319,7 +321,7 @@ mod tests {
     fn test_extract_single_sha256() {
         let input = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
         let expected = Indicator::Sha256(
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".as_bytes(),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string(),
         );
 
         assert_eq!(
@@ -332,7 +334,7 @@ mod tests {
     fn test_extract_sha512() {
         let input = "SHA512 hash: f1d9d8f153ec808a44cd63fb85f7cb811845b1596e46e78febd8c8b505a9b7d3a242c98b2b51261e5402f37334beefd7ba4066873a6dc56cd030cf29f4aef6dc";
         let expected = vec![Indicator::Sha512(
-            "f1d9d8f153ec808a44cd63fb85f7cb811845b1596e46e78febd8c8b505a9b7d3a242c98b2b51261e5402f37334beefd7ba4066873a6dc56cd030cf29f4aef6dc".as_bytes(),
+            "f1d9d8f153ec808a44cd63fb85f7cb811845b1596e46e78febd8c8b505a9b7d3a242c98b2b51261e5402f37334beefd7ba4066873a6dc56cd030cf29f4aef6dc".to_string()
         )];
 
         assert_eq!(
@@ -344,7 +346,7 @@ mod tests {
     #[test]
     fn test_extract_single_sha512() {
         let input = "f1d9d8f153ec808a44cd63fb85f7cb811845b1596e46e78febd8c8b505a9b7d3a242c98b2b51261e5402f37334beefd7ba4066873a6dc56cd030cf29f4aef6dc";
-        let expected = Indicator::Sha512("f1d9d8f153ec808a44cd63fb85f7cb811845b1596e46e78febd8c8b505a9b7d3a242c98b2b51261e5402f37334beefd7ba4066873a6dc56cd030cf29f4aef6dc".as_bytes());
+        let expected = Indicator::Sha512("f1d9d8f153ec808a44cd63fb85f7cb811845b1596e46e78febd8c8b505a9b7d3a242c98b2b51261e5402f37334beefd7ba4066873a6dc56cd030cf29f4aef6dc".to_string());
 
         assert_eq!(
             extract_indicator(input.as_bytes()),
