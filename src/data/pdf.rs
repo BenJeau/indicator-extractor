@@ -8,24 +8,24 @@ impl DataExtractor for PdfExtractor {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::parser::extract_indicators;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use crate::parser::extract_indicators;
 
-    #[test]
-    fn test_extract() {
-        let path = std::path::Path::new("resources/pdfs/aa23-131a_malicious_actors_exploit_cve-2023-27350_in_papercut_mf_and_ng_1.pdf");
-        let data = std::fs::read(path).unwrap();
-        let extractor = PdfExtractor;
-        let result = extractor.extract(&data);
+//     #[test]
+//     fn test_extract() {
+//         let path = std::path::Path::new("resources/pdfs/aa23-131a_malicious_actors_exploit_cve-2023-27350_in_papercut_mf_and_ng_1.pdf");
+//         let data = std::fs::read(path).unwrap();
+//         let extractor = PdfExtractor;
+//         let result = extractor.extract(&data);
 
-        let indicators = extract_indicators(&result.as_bytes()).unwrap();
+//         let indicators = extract_indicators(&result.as_bytes()).unwrap();
 
-        for indicator in indicators.1 {
-            println!("{:?}", indicator);
-        }
+//         for indicator in indicators.1 {
+//             println!("{:?}", indicator);
+//         }
 
-        assert!(false);
-    }
-}
+//         assert!(false);
+//     }
+// }
