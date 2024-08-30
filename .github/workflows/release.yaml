@@ -185,6 +185,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          registry-url: "https://npm.pkg.github.com"
       - name: Login to npm
         run: npm set "//npm.pkg.github.com/:_authToken=$GITHUB_TOKEN"
       - name: Rust setup
@@ -195,10 +196,14 @@ jobs:
         run: wasm-pack build --target bundler
       - name: Run wasm-pack pack
         run: wasm-pack pack
-      - name: Publish to npm.io
+      - name: Publish to npm via GitHub Packages
         run: |
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" > ~/.npmrc
+          npm config set registry https://npm.pkg.github.com
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "dry-run"
           else
             wasm-pack publish
           fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
