@@ -176,6 +176,9 @@ jobs:
   build-and-release-npm:
     needs: prepare-release
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -186,6 +189,7 @@ jobs:
         with:
           node-version: 20
           registry-url: "https://npm.pkg.github.com"
+          scope: "@BenJeau"
       - name: Login to npm
         run: npm set "//npm.pkg.github.com/:_authToken=$GITHUB_TOKEN"
       - name: Rust setup
@@ -198,8 +202,6 @@ jobs:
         run: wasm-pack pack
       - name: Publish to npm via GitHub Packages
         run: |
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" > ~/.npmrc
-          npm config set registry https://npm.pkg.github.com
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "dry-run"
           else
