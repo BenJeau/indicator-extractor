@@ -136,6 +136,17 @@ jobs:
           fi
       - name: Rust setup
         run: rustup toolchain install stable --profile minimal
+      - name: Setup cache
+        uses: actions/cache@v4
+        with:
+          save-always: true
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Update Cargo.toml version
         run: |
           sed -i -e 's/^version = .*/version = "${{ steps.bump-version.outputs.version }}"/' Cargo.toml
@@ -170,15 +181,23 @@ jobs:
           ref: ${{ needs.prepare-release.outputs.version }}
       - name: Rust setup
         run: rustup toolchain install stable --profile minimal
+      - name: Setup cache
+        uses: actions/cache@v4
+        with:
+          save-always: true
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Publish to crates.io
         run: cargo publish --token ${{ secrets.CARGO_TOKEN }} ${{ inputs.dry-run && '--dry-run' || '' }}
 
   build-and-release-npm:
     needs: prepare-release
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -188,12 +207,22 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@BenJeau"
+          registry-url: "https://registry.npmjs.org"
       - name: Login to npm
         run: npm set "//npm.pkg.github.com/:_authToken=$GITHUB_TOKEN"
       - name: Rust setup
         run: rustup toolchain install stable --profile minimal
+      - name: Setup cache
+        uses: actions/cache@v4
+        with:
+          save-always: true
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Install
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       - name: Run wasm-pack build
@@ -208,4 +237,4 @@ jobs:
             wasm-pack publish
           fi
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
