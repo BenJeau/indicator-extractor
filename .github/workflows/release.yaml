@@ -150,11 +150,11 @@ jobs:
           fi
       - name: Create and push tagged commit with version
         run: |
-          git tag ${{ steps.bump-version.outputs.new_version }}
+          git tag ${{ steps.bump-version.outputs.version }}
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "dry-run"
           else
-            git push origin ${{ steps.bump-version.outputs.new_version }}
+            git push origin ${{ steps.bump-version.outputs.version }}
           fi
 
   build-and-release-crates:
@@ -164,7 +164,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          ref: ${{ needs.prepare-release.outputs.version }}
       - name: Rust setup
         run: rustup toolchain install stable --profile minimal
       - name: Publish to crates.io
@@ -177,7 +177,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          ref: ${{ needs.prepare-release.outputs.version }}
       - name: Setup node
         uses: actions/setup-node@v4
         with:
