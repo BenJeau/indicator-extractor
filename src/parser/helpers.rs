@@ -25,11 +25,11 @@ pub(crate) fn dec_u8(input: &[u8]) -> IResult<&[u8], u8> {
 }
 
 pub(crate) fn defanged_period(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    alt((tag("."), tag("[.]")))(input)
+    alt((tag("."), tag("[.]"), tag("(.)")))(input)
 }
 
 pub(crate) fn defanged_colon(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    alt((tag(":"), tag("[:]")))(input)
+    alt((tag(":"), tag("[:]"), tag("(:)")))(input)
 }
 
 pub(crate) fn is_not_digit(c: u8) -> bool {
