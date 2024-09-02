@@ -2,6 +2,8 @@
 
 Extract indicators (IP, domain, email, hashes, Bitcoin addresses, Litecoin addresses, etc.) from a string or a PDF file written in Rust.
 
+An online playground is available at [ioc-extractor.jeaurond.dev](https://ioc-extractor.jeaurond.dev).
+
 ## Usage - Rust
 
 [![Build status](https://github.com/BenJeau/indicator-extractor/actions/workflows/release.yaml/badge.svg?branch=main)](https://github.com/BenJeau/indicator-extractor/actions/workflows/release.yaml)

@@ -13,8 +13,9 @@
 //!
 //! Currently the project only supports parsing of PDF files, but the goal is to add support for other file types and extraction methods thanks to the DataExtractor trait.
 //!
-//!
 //! The project is still in its early stages, so expect some breaking changes.
+//!
+//! An online playground is available at [ioc-extractor.jeaurond.dev](https://ioc-extractor.jeaurond.dev).
 //!
 //! # Usage
 //!
