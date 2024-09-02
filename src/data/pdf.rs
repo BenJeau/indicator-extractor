@@ -1,12 +1,6 @@
-use crate::data::DataExtractor;
-
 /// Extracts the text from a PDF file.
-pub struct PdfExtractor;
-
-impl DataExtractor for PdfExtractor {
-    fn extract(&self, data: &[u8]) -> String {
-        pdf_extract::extract_text_from_mem(data).unwrap()
-    }
+pub fn extract_text_pdf(data: &[u8]) -> String {
+    pdf_extract::extract_text_from_mem(data).unwrap()
 }
 
 // #[cfg(test)]

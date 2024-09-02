@@ -43,6 +43,7 @@
 //! The project is written in Rust and can be used in a WebAssembly build or as a Rust library. To use the WebAssembly build, you can install the package [indicator-extractor](https://www.npmjs.com/package/indicator-extractor) npm package.
 
 pub mod data;
+mod http;
 pub mod parser;
 
 #[cfg(target_family = "wasm")]

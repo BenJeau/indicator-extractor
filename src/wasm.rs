@@ -1,4 +1,4 @@
-use crate::data::{DataExtractor, PdfExtractor};
+use crate::data::{extract_text_pdf, scrape_website};
 use wasm_bindgen::prelude::*;
 
 /// Extract indicators (IP, domain, email, hashes, Bicoin addresses, Litecoin addresses, etc.) from an array of bytes.
@@ -22,7 +22,17 @@ pub fn extract_indicators_str(input: &str) -> JsValue {
 pub fn parse_pdf(input: &[u8]) -> String {
     console_error_panic_hook::set_once();
 
-    PdfExtractor.extract(input)
+    extract_text_pdf(input)
+}
+
+/// Scrapes a website and returns the text.
+///
+/// Might not work on all (most) websites due to CORS.
+#[wasm_bindgen(js_name = scrapeWebstie)]
+pub async fn scrape_website_ah(url: &str) -> String {
+    console_error_panic_hook::set_once();
+
+    scrape_website(url).await
 }
 
 #[wasm_bindgen(typescript_custom_section)]
