@@ -1,3 +1,5 @@
+//! Parser to extract indicators from a byte array.
+
 use bitcoin::{
     is_valid_bitcoin_p2pkh_address, is_valid_bitcoin_p2sh_address, is_valid_bitcoin_p2wpkh_address,
     is_valid_bitcoin_p2wsh_address, is_valid_litecoin_p2wpkh_address,
@@ -30,27 +32,48 @@ mod helpers;
 static TLD_EXTRACTOR: LazyLock<tldextract::TldExtractor> =
     LazyLock::new(|| tldextract::TldExtractor::new(Default::default()));
 
+/// Data representing a single indicator with a kind and a value.
+///
+/// If the value contained defanged data, the fangs will be removed. Meaning that `https[:]//github(.)com` will be represented as `Url("https://github.com")`.
 #[derive(Debug, PartialEq, PartialOrd, Ord, Eq, serde::Serialize)]
 #[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum Indicator {
+    /// An URL starting with `http` or `https`
     Url(String),
+    /// A domain name with a valid TLD (e.g., `github.com`) with validation using [tldextract](https://github.com/john-kurkowski/tldextract)
     Domain(String),
+    /// A filename with very basic validation (e.g. if it has a `.`), but no extension validation. It's not guaranteed to be a valid filename and is mostly a catch-all if it wasn't able to match any other indicator.
     File(String),
+    /// An email address, e.g. `benoit@jeaurond.dev`
     Email(String),
+    /// An IPv4 address, e.g. `127.0.0.1`
     Ipv4(Ipv4Addr),
+    /// An IPv6 address, e.g. `2001:0db8:85a3:0000:0000:8a2e:0370:7334`
     Ipv6(Ipv6Addr),
+    /// A case-insentive SHA512 hash, e.g. `f1d9d8f153ec808a44cd63fb85f7cb811845b1596e46e78febd8c8b505a9b7d3a242c98b2b51261e5402f37334beefd7ba4066873a6dc56cd030cf29f4aef6dc`
     Sha512(String),
+    /// A case-insentive SHA256 hash, e.g. `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
     Sha256(String),
+    /// A case-insentive SHA1 hash, e.g. `da39a3ee5e6b4b0d3255bfef95601890afd80709`
     Sha1(String),
+    /// A case-insentive MD5 hash, e.g. `d41d8cd98f00b204e9800998ecf8427e`
     Md5(String),
+    /// A Bitcoin [P2PKH](https://learnmeabitcoin.com/technical/script/p2pkh/) address, e.g. `1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa`
     BitcoinP2pkhAddress(String),
+    /// A Bitcoin [P2SH](https://learnmeabitcoin.com/technical/script/p2sh/) address, e.g. `32jmM9eev8E7CGCAWLSHQnqgHBifcHzgQf`
     BitcoinP2shAddress(String),
+    /// A Bitcoin [P2WPKH](https://learnmeabitcoin.com/technical/script/p2wpkh/) address, e.g. `bc1p4w46h2at4w46h2at4w46h2at4w46h2at5kreae`
     BitcoinP2wpkhAddress(String),
+    /// A Bitcoin [P2WSH](https://learnmeabitcoin.com/technical/script/p2wsh/) address, e.g. `bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3`
     BitcoinP2wshAddress(String),
     LitecoinP2pkhAddress(String),
+    /// A Litecoin P2WPKH address, e.g. `ltc1q8c6fshw2dlwun7ekn9qwf37cu2rn755u9ym7p0`
     LitecoinP2wpkhAddress(String),
 }
 
+/// Extracts and validates indicators from a byte array using nom combinators and functions returning a vector of sorted deduplicated indicators.
+///
+/// This shouldn't error if it can't extract any indicators.
 pub fn extract_indicators(input: &[u8]) -> IResult<&[u8], Vec<Indicator>> {
     let (input, _) = multispace0(input)?;
     let (input, indicator) = complete(separated_list0(
@@ -65,6 +88,9 @@ pub fn extract_indicators(input: &[u8]) -> IResult<&[u8], Vec<Indicator>> {
     Ok((input, indicators))
 }
 
+/// Extracts and validates a single indicator from a byte array using nom combinators and functions returning an indicator.
+///
+/// This will error if its not able to extract an indicator.
 pub fn extract_indicator(input: &[u8]) -> IResult<&[u8], Indicator> {
     alt((
         extract_url,

@@ -1,32 +1,51 @@
-use crate::data::{DataExtractor, PdfExtractor};
-use wasm_bindgen::prelude::*;
+//! A fast indicator extractor based on a paser combinator framework ([nom](https://github.com/rust-bakery/nom)) and a PDF parser ([pdf-extract](https://github.com/benjeffrey/pdf-extract)).
+//!
+//! The goal is to be able to extract indicators either defanged or not with `[.]`, `(.)`, `[:]`, or `(:)`. The exhaustive list of types can be found in the [`parser::Indicator`] enum. Here's an overview of the types
+//! - IPv4
+//! - IPv6
+//! - Domains
+//! - URLs
+//! - Emails
+//! - Hashes
+//! - Filenames
+//! - Bicoin addresses
+//! - Litecoin addresses
+//!
+//! Currently the project only supports parsing of PDF files, but the goal is to add support for other file types and extraction methods thanks to the DataExtractor trait.
+//!
+//!
+//! The project is still in its early stages, so expect some breaking changes.
+//!
+//! # Usage
+//!
+//! To extract indicators from a string/bytes:
+//!
+//! ```
+//! use indicator_extractor::parser::extract_indicators;
+//!
+//! let result = extract_indicators("https://github.com".as_bytes());
+//! println!("{:?}", result); // Ok(([], [Indicator::Url("https://github.com")])
+//! ```
+//!
+//! To extract indicators from a PDF file:
+//!
+//! ```
+//! use indicator_extractor::{data::{PdfExtractor, DataExtractor}, parser::extract_indicators};
+//!
+//! let pdf_data = std::fs::read("./resources/pdfs/aa23-131a_malicious_actors_exploit_cve-2023-27350_in_papercut_mf_and_ng_1.pdf").unwrap();
+//! let pdf_string = PdfExtractor.extract(&pdf_data);
+//! let result = extract_indicators(pdf_string.as_bytes());
+//! ```
+//!
+//! # WebAssembly
+//!
+//! The project is written in Rust and can be used in a WebAssembly build or as a Rust library. To use the WebAssembly build, you can install the package [indicator-extractor](https://www.npmjs.com/package/indicator-extractor) npm package.
 
 pub mod data;
 pub mod parser;
 
-/// Extract indicators (IP, domain, email, hashes, Bicoin addresses, Litecoin addresses, etc.) from an array of bytes.
-#[wasm_bindgen(js_name = extractIndicatorsBytes, skip_typescript)]
-pub fn extract_indicators_bytes(input: &[u8]) -> JsValue {
-    console_error_panic_hook::set_once();
+#[cfg(target_family = "wasm")]
+mod wasm;
 
-    let data = crate::parser::extract_indicators(input).unwrap().1;
-
-    serde_wasm_bindgen::to_value(&data).unwrap()
-}
-
-/// Extract indicators (IP, domain, email, hashes, Bicoin addresses, Litecoin addresses, etc.) from a string, uses `extractIndicatorsBytes` internally.
-#[wasm_bindgen(js_name = extractIndicators, skip_typescript)]
-pub fn extract_indicators_str(input: &str) -> JsValue {
-    extract_indicators_bytes(input.as_bytes())
-}
-
-/// Extracts the text from a PDF file.
-#[wasm_bindgen(js_name = parsePdf)]
-pub fn parse_pdf(input: &[u8]) -> String {
-    console_error_panic_hook::set_once();
-
-    PdfExtractor.extract(input)
-}
-
-#[wasm_bindgen(typescript_custom_section)]
-const TS_APPEND_CONTENT: &'static str = include_str!("indicator_extractor.d.ts");
+#[cfg(target_family = "wasm")]
+pub use crate::wasm::*;

@@ -1,5 +1,6 @@
 use crate::data::DataExtractor;
 
+/// Extracts the text from a PDF file.
 pub struct PdfExtractor;
 
 impl DataExtractor for PdfExtractor {
