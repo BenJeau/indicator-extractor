@@ -35,6 +35,14 @@ let pdf_string = extract_text_pdf(&pdf_data);
 let result = extract_indicators(pdf_string.as_bytes());
 ```
 
+### To scrape a website
+
+```rust
+use indicator_extractor::data::scrape_website;
+
+let result = scrape_website("https://github.com").await;
+```
+
 ## Usage - Web
 
 [![NPM Version](https://img.shields.io/npm/v/indicator-extractor)](https://www.npmjs.com/package/indicator-extractor)
@@ -52,6 +60,7 @@ import {
   extractIndicators,
   extractIndicatorsBytes,
   parsePdf,
+  scrapeWebsite,
   Indicator,
 } from "indicator-extractor/indicator_extractor";
 
@@ -66,4 +75,9 @@ const extractPdf: Indicator[] = extractIndicatorsBytes(new Uint8Array());
 const pdfData: string = parsePdf(new Uint8Array());
 // Where you can then use `extractIndicators` on the text
 const pdfIndicators: Indicator[] = extractIndicators(pdfData);
+
+// Or scrape a website
+const websiteText: string = scrapeWebsite("https://github.com");
+// Where you can then use `extractIndicators` on the text
+const websiteIndicators: Indicator[] = extractIndicators(websiteText);
 ```
