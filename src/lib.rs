@@ -31,10 +31,10 @@
 //! To extract indicators from a PDF file:
 //!
 //! ```
-//! use indicator_extractor::{data::{PdfExtractor, DataExtractor}, parser::extract_indicators};
+//! use indicator_extractor::{data::extract_text_pdf, parser::extract_indicators};
 //!
 //! let pdf_data = std::fs::read("./resources/pdfs/aa23-131a_malicious_actors_exploit_cve-2023-27350_in_papercut_mf_and_ng_1.pdf").unwrap();
-//! let pdf_string = PdfExtractor.extract(&pdf_data);
+//! let pdf_string = extract_text_pdf(&pdf_data);
 //! let result = extract_indicators(pdf_string.as_bytes());
 //! ```
 //!

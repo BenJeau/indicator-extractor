@@ -28,10 +28,10 @@ println!("{:?}", result); // Ok(([], [Indicator::Url("https://github.com")])
 ### To extract indicators from a PDF file
 
 ```rust
-use indicator_extractor::{data::{PdfExtractor, DataExtractor}, parser::extract_indicators};
+use indicator_extractor::{data::extract_text_pdf, parser::extract_indicators};
 
 let pdf_data = std::fs::read("./somewhere/pdf_file_path.pdf").unwrap();
-let pdf_string = PdfExtractor.extract(&pdf_data);
+let pdf_string = extract_text_pdf(&pdf_data);
 let result = extract_indicators(pdf_string.as_bytes());
 ```
 
