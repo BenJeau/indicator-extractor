@@ -1,10 +1,14 @@
+use bitcoin::{
+    is_valid_bitcoin_p2pkh_address, is_valid_bitcoin_p2sh_address, is_valid_bitcoin_p2wpkh_address,
+    is_valid_bitcoin_p2wsh_address, is_valid_litecoin_p2wpkh_address,
+};
 use helpers::{
-    bytes_to_string, dec_u8, defanged_colon, defanged_period, hex_u16, is_multispace, is_not_digit,
-    is_not_hex_digit,
+    bytes_to_string, dec_u8, defanged_colon, defanged_period, hex_u16, is_base58, is_bech32,
+    is_multispace, is_not_digit, is_not_hex_digit,
 };
 use nom::{
     branch::alt,
-    bytes::complete::{is_not, tag, take_till, take_while},
+    bytes::complete::{is_not, tag, tag_no_case, take_till, take_while},
     character::{
         complete::{alphanumeric1, hex_digit1, multispace0, multispace1},
         is_alphanumeric,
@@ -13,13 +17,14 @@ use nom::{
     error::{make_error, ErrorKind},
     multi::{many1, separated_list0, separated_list1},
     sequence::preceded,
-    Err, IResult,
+    Err, IResult, Parser,
 };
 use std::{
     net::{Ipv4Addr, Ipv6Addr},
     sync::LazyLock,
 };
 
+mod bitcoin;
 mod helpers;
 
 static TLD_EXTRACTOR: LazyLock<tldextract::TldExtractor> =
@@ -38,12 +43,18 @@ pub enum Indicator {
     Sha256(String),
     Sha1(String),
     Md5(String),
+    BitcoinP2pkhAddress(String),
+    BitcoinP2shAddress(String),
+    BitcoinP2wpkhAddress(String),
+    BitcoinP2wshAddress(String),
+    LitecoinP2pkhAddress(String),
+    LitecoinP2wpkhAddress(String),
 }
 
 pub fn extract_indicators(input: &[u8]) -> IResult<&[u8], Vec<Indicator>> {
     let (input, _) = multispace0(input)?;
     let (input, indicator) = complete(separated_list0(
-        preceded(opt(is_not(" \t\r\n")), multispace1),
+        opt(is_not(" \t\r\n")).and(multispace1),
         opt(extract_indicator),
     ))(input)?;
 
@@ -62,11 +73,16 @@ pub fn extract_indicator(input: &[u8]) -> IResult<&[u8], Indicator> {
         extract_ipv6,
         extract_hash,
         extract_domain,
+        extract_bitcoin_p2pkh_address,
+        extract_bitcoin_p2sh_address,
+        extract_bitcoin_p2wpkh_address,
+        extract_bitcoin_p2wsh_address,
+        extract_litecoin_p2wpkh_address,
     ))(input)
 }
 
 fn extract_url(input: &[u8]) -> IResult<&[u8], Indicator> {
-    let (input, scheme) = alt((tag("http"), tag("https")))(input)?;
+    let (input, scheme) = alt((tag_no_case("https"), tag_no_case("http")))(input)?;
     let (input, _) = defanged_colon(input)?;
     let (input, _) = tag("//")(input)?;
     let (input, host) = separated_list1(defanged_period, alt((alphanumeric1, tag("-"))))(input)?;
@@ -124,7 +140,7 @@ fn extract_domain(input: &[u8]) -> IResult<&[u8], Indicator> {
 
 fn extract_email(input: &[u8]) -> IResult<&[u8], Indicator> {
     let (input, _) = opt(take_while(|c| {
-        c != b'.' && c != b'-' && c != b'_' && c != b'+' && !is_alphanumeric(c)
+        c != b'.' && c != b'-' && c != b'_' && c != b'+' && !is_alphanumeric(c) && !is_multispace(c)
     }))(input)?;
 
     let (input, email) =
@@ -145,7 +161,7 @@ fn extract_email(input: &[u8]) -> IResult<&[u8], Indicator> {
 }
 
 fn extract_ipv4(input: &[u8]) -> IResult<&[u8], Indicator> {
-    let (input, _) = opt(take_while(is_not_digit))(input)?;
+    let (input, _) = opt(take_while(|c| is_not_digit(c) && !is_multispace(c)))(input)?;
 
     let (input, octects) = separated_list1(defanged_period, dec_u8)(input)?;
     if octects.len() != 4 {
@@ -157,7 +173,9 @@ fn extract_ipv4(input: &[u8]) -> IResult<&[u8], Indicator> {
 }
 
 fn extract_ipv6(input: &[u8]) -> IResult<&[u8], Indicator> {
-    let (input, _) = opt(take_while(|c| c != b':' && !is_alphanumeric(c)))(input)?;
+    let (input, _) = opt(take_while(|c| {
+        c != b':' && !is_alphanumeric(c) && !is_multispace(c)
+    }))(input)?;
 
     let (input, hexes) = separated_list1(defanged_colon, hex_u16)(input)?;
     if hexes.len() != 8 {
@@ -171,7 +189,7 @@ fn extract_ipv6(input: &[u8]) -> IResult<&[u8], Indicator> {
 }
 
 fn extract_hash(input: &[u8]) -> IResult<&[u8], Indicator> {
-    let (input, _) = opt(take_while(is_not_hex_digit))(input)?;
+    let (input, _) = opt(take_while(|c| is_not_hex_digit(c) && !is_multispace(c)))(input)?;
 
     let (input, hash) = hex_digit1(input)?;
 
@@ -184,9 +202,120 @@ fn extract_hash(input: &[u8]) -> IResult<&[u8], Indicator> {
     }
 }
 
+fn extract_bitcoin_p2pkh_address(input: &[u8]) -> IResult<&[u8], Indicator> {
+    let (input, _) = opt(take_while(|c| c != b'1' && !is_multispace(c)))(input)?;
+
+    let (input, prefix) = tag("1")(input)?;
+    let (input, address) = is_base58(input)?;
+
+    if is_valid_bitcoin_p2pkh_address(address) {
+        Ok((
+            input,
+            Indicator::BitcoinP2pkhAddress(bytes_to_string(&[prefix, address].concat())),
+        ))
+    } else {
+        Err(Err::Error(make_error(input, ErrorKind::Verify)))
+    }
+}
+
+fn extract_bitcoin_p2sh_address(input: &[u8]) -> IResult<&[u8], Indicator> {
+    let (input, _) = opt(take_while(|c| c != b'3' && !is_multispace(c)))(input)?;
+
+    let (input, prefix) = tag("3")(input)?;
+    let (input, address) = is_base58(input)?;
+
+    if is_valid_bitcoin_p2sh_address(address) {
+        Ok((
+            input,
+            Indicator::BitcoinP2shAddress(bytes_to_string(&[prefix, address].concat())),
+        ))
+    } else {
+        Err(Err::Error(make_error(input, ErrorKind::Verify)))
+    }
+}
+
+fn extract_bitcoin_p2wpkh_address(input: &[u8]) -> IResult<&[u8], Indicator> {
+    let (input, _) = opt(take_while(|c| c != b'b' && c != b't' && !is_multispace(c)))(input)?;
+
+    let (input, prefix) = alt((tag_no_case("bc1"), tag_no_case("tb1")))(input)?;
+    let (input, address) = is_bech32(input)?;
+
+    let address = &[prefix, address].concat();
+
+    if is_valid_bitcoin_p2wpkh_address(address) {
+        Ok((
+            input,
+            Indicator::BitcoinP2wpkhAddress(bytes_to_string(address)),
+        ))
+    } else {
+        Err(Err::Error(make_error(input, ErrorKind::Verify)))
+    }
+}
+
+fn extract_bitcoin_p2wsh_address(input: &[u8]) -> IResult<&[u8], Indicator> {
+    let (input, _) = opt(take_while(|c| c != b'b' && c != b't' && !is_multispace(c)))(input)?;
+
+    let (input, prefix) = alt((tag_no_case("bc1"), tag_no_case("tb1")))(input)?;
+    let (input, address) = is_bech32(input)?;
+
+    let address = &[prefix, address].concat();
+
+    if is_valid_bitcoin_p2wsh_address(address) {
+        Ok((
+            input,
+            Indicator::BitcoinP2wshAddress(bytes_to_string(address)),
+        ))
+    } else {
+        Err(Err::Error(make_error(input, ErrorKind::Verify)))
+    }
+}
+
+fn extract_litecoin_p2wpkh_address(input: &[u8]) -> IResult<&[u8], Indicator> {
+    let (input, _) = opt(take_while(|c| c != b'l' && !is_multispace(c)))(input)?;
+
+    let (input, prefix) = tag("ltc1")(input)?;
+    let (input, address) = is_bech32(input)?;
+
+    let address = &[prefix, address].concat();
+
+    if is_valid_litecoin_p2wpkh_address(address) {
+        Ok((
+            input,
+            Indicator::LitecoinP2wpkhAddress(bytes_to_string(address)),
+        ))
+    } else {
+        Err(Err::Error(make_error(input, ErrorKind::Verify)))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_extract_single_litecoin_p2wpkh_address() {
+        let input = "ltc1q8c6fshw2dlwun7ekn9qwf37cu2rn755u9ym7p0";
+        let expected = Indicator::LitecoinP2wpkhAddress(
+            "ltc1q8c6fshw2dlwun7ekn9qwf37cu2rn755u9ym7p0".to_string(),
+        );
+
+        assert_eq!(
+            extract_indicator(input.as_bytes()),
+            Ok(("".as_bytes(), expected))
+        );
+    }
+
+    #[test]
+    fn test_extract_single_bitcoin_pubkey() {
+        let input = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa";
+        let expected =
+            Indicator::BitcoinP2pkhAddress("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa".to_string());
+
+        assert_eq!(
+            extract_indicator(input.as_bytes()),
+            Ok(("".as_bytes(), expected))
+        );
+    }
 
     #[test]
     fn test_extract_single_url() {
@@ -352,5 +481,55 @@ mod tests {
             extract_indicator(input.as_bytes()),
             Ok(("".as_bytes(), expected))
         );
+    }
+
+    #[test]
+    fn test_multiple_indicators() {
+        let input = r#"    Domain: AM6P194CA0000.outlook.office.com
+    Domain: AMS0EPF000000A0.eurprd01.prod.outlook.com
+    Domain: me512.com
+    File: 1.0
+    File: 15.21.7897.01
+    File: 15.26.7918.123
+    File: AA6P194CA0000.EURP001.PROD.OUTLOOK.COM
+    File: CC3PR84AB3445.LAPE210.PROD.OUTLOOK.COM
+    Email: 8ab3fa386978525c7fd59cb135f0fbc598c8@outlook.com
+    Email: ALLOW@OUTLOOK.COM
+    Email: allow@outlook.com
+    Ipv4: 10.167.20.233
+    Ipv4: 96.21.95.53
+    BitcoinP2pkhAddress: 15N6Q12yFN3xa8ChqXDWWGgZPYcZdoTyRa
+    LitecoinP2wpkhAddress: ltc1q8c6fshw2dlwun7ekn9qwf37cu2rn755u9ym7p0"#;
+
+        let expected = vec![
+            Indicator::Domain("AM6P194CA0000.outlook.office.com".to_string()),
+            Indicator::Domain("AMS0EPF000000A0.eurprd01.prod.outlook.com".to_string()),
+            Indicator::Domain("me512.com".to_string()),
+            Indicator::File("1.0".to_string()),
+            Indicator::File("15.21.7897.01".to_string()),
+            Indicator::File("15.26.7918.123".to_string()),
+            Indicator::File("AA6P194CA0000.EURP001.PROD.OUTLOOK.COM".to_string()),
+            Indicator::File("CC3PR84AB3445.LAPE210.PROD.OUTLOOK.COM".to_string()),
+            Indicator::Email("8ab3fa386978525c7fd59cb135f0fbc598c8@outlook.com".to_string()),
+            Indicator::Email("ALLOW@OUTLOOK.COM".to_string()),
+            Indicator::Email("allow@outlook.com".to_string()),
+            Indicator::Ipv4(Ipv4Addr::new(10, 167, 20, 233)),
+            Indicator::Ipv4(Ipv4Addr::new(96, 21, 95, 53)),
+            Indicator::BitcoinP2pkhAddress("15N6Q12yFN3xa8ChqXDWWGgZPYcZdoTyRa".to_string()),
+            Indicator::LitecoinP2wpkhAddress(
+                "ltc1q8c6fshw2dlwun7ekn9qwf37cu2rn755u9ym7p0".to_string(),
+            ),
+        ];
+
+        let (input, result) = extract_indicators(input.as_bytes()).unwrap();
+
+        for indicator in expected.iter() {
+            assert!(
+                result.contains(indicator),
+                "indicator {indicator:?} doesn't match"
+            );
+        }
+
+        assert_eq!(input.len(), 0);
     }
 }

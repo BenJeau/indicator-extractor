@@ -1,6 +1,6 @@
 use nom::{
     branch::alt,
-    bytes::complete::tag,
+    bytes::complete::{is_a, tag},
     character::{complete::digit1, is_digit, is_hex_digit},
     error::{make_error, ErrorKind},
     number::complete::hex_u32,
@@ -45,5 +45,13 @@ pub(crate) fn is_multispace(c: u8) -> bool {
 }
 
 pub(crate) fn bytes_to_string(bytes: &[u8]) -> String {
-    std::str::from_utf8(bytes).unwrap().to_string()
+    String::from_utf8_lossy(bytes).to_string()
+}
+
+pub(crate) fn is_base58(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    is_a("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")(input)
+}
+
+pub(crate) fn is_bech32(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    is_a("023456789acdefghjklmnpqrstuvwxyz")(input)
 }
