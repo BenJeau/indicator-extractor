@@ -14,16 +14,25 @@ npm install indicator-extractor
 
 Then you can use it like this:
 
-```js
-import { extract_str, extract_pdf, extract_bytes } from "indicator-extractor";
+```ts
+import {
+  extractIndicators,
+  extractIndicatorsBytes,
+  parsePdf,
+  Indicator,
+} from "indicator-extractor/indicator_extractor";
 
-const resultStr = extract_str("https://github.com");
-console.log(resultStr); // ['{"kind":"Url","value":"https://github.com"}']
+// Extract indicators from a string
+const indicators: Indicator[] = extractIndicators("https://github.com");
+console.log(indicators); // [{"kind":"url","value":"https://github.com"}]
 
-// Similarly for the other functions
+// Or if you prefer bytes
+const extractPdf: Indicator[] = extractIndicatorsBytes(new Uint8Array());
 
-const extractPdf = extract_pdf(new Uint8Array());
-const extractBytes = extract_bytes(new Uint8Array());
+// You can also parse a PDF file to get its text
+const pdfData: string = parsePdf(new Uint8Array());
+// Where you can then use `extractIndicators` on the text
+const pdfIndicators: Indicator[] = extractIndicators(pdfData);
 ```
 
 ### Rust [![Crates.io Version](https://img.shields.io/crates/v/indicator-extractor?style=flat-square)](https://crates.io/crates/indicator-extractor)
@@ -46,7 +55,7 @@ println!("{:?}", result); // Ok(([], [Indicator::Url("https://github.com")])
 #### To extract indicators from a PDF file
 
 ```rust
-use indicator_extractor::{data{::PdfExtractor, DataExtractor}, parser::extract_indicators};
+use indicator_extractor::{data::{PdfExtractor, DataExtractor}, parser::extract_indicators};
 
 let pdf_data = std::fs::read("./somewhere/pdf_file_path.pdf").unwrap();
 let pdf_string = PdfExtractor.extract(&pdf_data);

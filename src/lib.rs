@@ -1,42 +1,32 @@
-use wasm_bindgen::prelude::wasm_bindgen;
+use crate::data::{DataExtractor, PdfExtractor};
+use wasm_bindgen::prelude::*;
 
 pub mod data;
 pub mod parser;
 
-#[wasm_bindgen]
-pub fn extract_bytes(input: &[u8]) -> Vec<String> {
+/// Extract indicators (IP, domain, email, hashes, Bicoin addresses, Litecoin addresses, etc.) from an array of bytes.
+#[wasm_bindgen(js_name = extractIndicatorsBytes, skip_typescript)]
+pub fn extract_indicators_bytes(input: &[u8]) -> JsValue {
     console_error_panic_hook::set_once();
 
-    crate::parser::extract_indicators(input)
-        .unwrap()
-        .1
-        .into_iter()
-        .map(|i| serde_json::to_string(&i).unwrap())
-        .collect()
+    let data = crate::parser::extract_indicators(input).unwrap().1;
+
+    serde_wasm_bindgen::to_value(&data).unwrap()
 }
 
-#[wasm_bindgen]
-pub fn extract_str(input: &str) -> Vec<String> {
+/// Extract indicators (IP, domain, email, hashes, Bicoin addresses, Litecoin addresses, etc.) from a string, uses `extractIndicatorsBytes` internally.
+#[wasm_bindgen(js_name = extractIndicators, skip_typescript)]
+pub fn extract_indicators_str(input: &str) -> JsValue {
+    extract_indicators_bytes(input.as_bytes())
+}
+
+/// Extracts the text from a PDF file.
+#[wasm_bindgen(js_name = parsePdf)]
+pub fn parse_pdf(input: &[u8]) -> String {
     console_error_panic_hook::set_once();
 
-    crate::parser::extract_indicators(input.as_bytes())
-        .unwrap()
-        .1
-        .into_iter()
-        .map(|i| serde_json::to_string(&i).unwrap())
-        .collect()
+    PdfExtractor.extract(input)
 }
 
-#[wasm_bindgen]
-pub fn extract_pdf(input: &[u8]) -> Vec<String> {
-    console_error_panic_hook::set_once();
-
-    use crate::data::DataExtractor;
-
-    crate::parser::extract_indicators(crate::data::PdfExtractor.extract(input).as_bytes())
-        .unwrap()
-        .1
-        .into_iter()
-        .map(|i| serde_json::to_string(&i).unwrap())
-        .collect()
-}
+#[wasm_bindgen(typescript_custom_section)]
+const TS_APPEND_CONTENT: &'static str = include_str!("indicator_extractor.d.ts");

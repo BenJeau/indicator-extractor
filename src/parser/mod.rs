@@ -31,7 +31,7 @@ static TLD_EXTRACTOR: LazyLock<tldextract::TldExtractor> =
     LazyLock::new(|| tldextract::TldExtractor::new(Default::default()));
 
 #[derive(Debug, PartialEq, PartialOrd, Ord, Eq, serde::Serialize)]
-#[serde(tag = "kind", content = "value")]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum Indicator {
     Url(String),
     Domain(String),
