@@ -1,5 +1,5 @@
 #[cfg(not(target_arch = "wasm32"))]
-pub async fn get(url: &str) -> Vec<u8> {
+pub fn get(url: &str) -> Vec<u8> {
     use std::io::Read;
     let resp = ureq::get(url).call().unwrap();
 

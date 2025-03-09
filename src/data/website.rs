@@ -1,9 +1,7 @@
 use crate::http;
 
 pub async fn scrape_website(url: &str) -> String {
-    std::str::from_utf8(&http::get(url).await)
-        .unwrap()
-        .to_string()
+    std::str::from_utf8(&http::get(url)).unwrap().to_string()
 }
 
 // #[cfg(test)]
